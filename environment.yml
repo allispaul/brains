@@ -1,0 +1,11 @@
+name: brains
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - torchvision
+  - pytorch
+  - numpy
+  - pandas
+  - kaggle
+  - scikit-learn
