@@ -9,3 +9,6 @@ dependencies:
   - pandas
   - kaggle
   - scikit-learn
+  - grip
+  - ipykernel
+  - pyarrow
