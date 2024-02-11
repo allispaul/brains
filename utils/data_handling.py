@@ -9,6 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 import joblib
+import torch
 from tqdm.auto import tqdm
 
 # BASE_PATH = Path("/kaggle/input/hms-harmful-brain-activity-classification")
@@ -68,3 +69,32 @@ def process_all_specs():
         for spec_id in tqdm(test_spec_ids, total=len(test_spec_ids))
     )
     print(f"Saved spectrograms as .npy files in {SPEC_DIR}")
+    
+class SpectrogramDataset(torch.utils.data.Dataset):
+    def __init__(self, metadata_df):
+        self.metadata_df = metadata_df
+        
+    def __len__(self):
+        return len(self.metadata_df)
+    
+    def __getitem__(self, i):
+        npy_path = self.metadata_df["spec_npy_path"].iloc[i]
+        offset = int(self.metadata_df["spectrogram_label_offset_seconds"].iloc[i])
+        tens = torch.from_numpy(np.load(npy_path))[:, offset//2:offset//2+300]
+        expert_votes = self.metadata_df[[
+            "seizure_vote", "lpd_vote", "gpd_vote",
+            "lrda_vote", "grda_vote", "other_vote"
+        ]].iloc[i]
+        target = torch.tensor(np.asarray(expert_votes))
+        return tens, target
+    
+class SpectrogramTestDataset(SpectrogramDataset):
+    def __getitem__(self, i):
+        npy_path = self.metadata_df["spec_npy_path"].iloc[i]
+        tens = torch.from_numpy(np.load(npy_path))
+        target = None
+        return tens, target
+        
+        
+    
+        
