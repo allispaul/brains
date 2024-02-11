@@ -3,15 +3,14 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - torchvision
-  - pytorch
   - numpy
   - pandas
-  - kaggle
   - scikit-learn
-  - grip
+  - kaggle
+  - matplotlib
   - ipykernel
   - pyarrow
-  - torchinfo
-  - matplotlib
-prefix: /home/pvk/miniconda3/envs/brains
+  - grip
+  - pytorch-cuda=12.1  # omit to install without CUDA
+  - torchvision
+  - pytorch

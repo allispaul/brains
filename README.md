@@ -18,9 +18,11 @@ Work in Python projects often happens in a virtual environment: an isolated syst
 
 To set up the virtual environment for this repository:
 1. Install [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html).
-2. `conda create --name brains --file environment.yml`. This will create a new virtual environment named `brains` (you can choose a different name if you prefer) and install the packages listed in the file `environment.yml`.
-3. `conda activate brains`. To leave the virtual environment, use `conda deactivate`.
-4. Assuming you're running Jupyter Notebook or Jupyter Lab, run `python -m ipykernel install --user --name=brains` with the environment active. This will add the environment to your list of kernels in Jupyter.
+2. Look at the `environment.yml` file in this repository. If you want to install pytorch without CUDA support (e.g. you don't have a GPU), delete the `pytorch-cuda` line.
+3. `conda create --name brains --file environment.yml`. This will create a new virtual environment named `brains` (you can choose a different name if you prefer) and install the packages listed in the file `environment.yml`.
+4. `conda activate brains`. To leave the virtual environment, use `conda deactivate`.
+5. To check that CUDA is working, `python -c "import torch; print(torch.cuda.is_available())"` should give you `True`.
+6. Assuming you're running Jupyter Notebook or Jupyter Lab, run `python -m ipykernel install --user --name=brains` with the environment active. This will add the environment to your list of kernels in Jupyter.
 
 You can add more packages to the spec if you want: install them with conda or pip, then run `conda env export --from-history > environment.yml` to regenerate the spec. You should delete the line starting with `prefix:` (which will be specific to your computer) before pushing.
 
