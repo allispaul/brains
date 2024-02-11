@@ -71,8 +71,9 @@ def process_all_specs():
     print(f"Saved spectrograms as .npy files in {SPEC_DIR}")
     
 class SpectrogramDataset(torch.utils.data.Dataset):
-    def __init__(self, metadata_df):
+    def __init__(self, metadata_df, item_transforms=None):
         self.metadata_df = metadata_df
+        self.item_transforms = item_transforms
         
     def __len__(self):
         return len(self.metadata_df)
@@ -81,11 +82,14 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         npy_path = self.metadata_df["spec_npy_path"].iloc[i]
         offset = int(self.metadata_df["spectrogram_label_offset_seconds"].iloc[i])
         tens = torch.from_numpy(np.load(npy_path))[:, offset//2:offset//2+300]
+        if self.item_transforms is not None:
+            tens = self.item_transforms(tens)
         expert_votes = self.metadata_df[[
             "seizure_vote", "lpd_vote", "gpd_vote",
             "lrda_vote", "grda_vote", "other_vote"
         ]].iloc[i]
-        target = torch.tensor(np.asarray(expert_votes))
+        # target should be float so that nn.KLDivLoss works
+        target = torch.tensor(np.asarray(expert_votes)).float()
         return tens, target
     
 class SpectrogramTestDataset(SpectrogramDataset):
