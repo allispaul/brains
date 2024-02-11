@@ -11,6 +11,7 @@ dependencies:
   - ipykernel
   - pyarrow
   - grip
-  - pytorch-cuda=12.1  # omit to install without CUDA
+  - pytorch-cuda=12.1  # delete to install without CUDA
   - torchvision
   - pytorch
+  - torchinfo
