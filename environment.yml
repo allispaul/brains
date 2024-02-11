@@ -12,3 +12,6 @@ dependencies:
   - grip
   - ipykernel
   - pyarrow
+  - torchinfo
+  - matplotlib
+prefix: /home/pvk/miniconda3/envs/brains
