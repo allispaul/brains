@@ -1,0 +1,16 @@
+{
+  "id": "allispaul/utils",
+  "title": "utils",
+  "code_file": "utils.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": "true",
+  "enable_gpu": "false",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "keywords": ["util-script"],
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
