@@ -1,185 +1,4 @@
-## This file should just contain the contents of everything else in the folder, for use on Kaggle.
-## Named utils.py so that "from utils import *" works equally well on Kaggle or locally.
-## TODO: Auto-generate this file! We would have to:
-## 1) Copy all other files (besides __init__.py) to this file,
-## 2) Delete module docstrings,
-## 3) Delete "cross-reference imports" (i.e. from .logging import create_writer).
-
-#### From data_handling.py
-from pathlib import Path
-import os
-import numpy as np
-import pandas as pd
-import joblib
-import torch
-from tqdm.auto import tqdm
-
-# BASE_PATH = Path("/kaggle/input/hms-harmful-brain-activity-classification")
-BASE_PATH = Path("data/")
-# SPEC_DIR = Path("/tmp/dataset/hms-hbac")
-SPEC_DIR = Path("data/spectrograms_npy")
-
-class_names = ['Seizure', 'LPD', 'GPD', 'LRDA','GRDA', 'Other']
-label2name = dict(enumerate(class_names))
-name2label = {v:k for k, v in label2name.items()}
-
-def create_spec_npy_dirs():
-    """Create folders to save the spectrogram .npys."""
-    os.makedirs(SPEC_DIR/'train_spectrograms', exist_ok=True)
-    os.makedirs(SPEC_DIR/'test_spectrograms', exist_ok=True)
-    print(f"Created directories {SPEC_DIR/'train_spectrograms'}, {SPEC_DIR/'test_spectrograms'}")
-
-def metadata_df(split="train"):
-    """Return a DataFrame with metadata for the train or test set."""
-    if split not in ["train", "test"]:
-        raise ValueError('Expected split="train" or split="test"')
-    metadata = pd.read_csv(f'{BASE_PATH}/{split}.csv')
-    metadata['eeg_path'] = f'{BASE_PATH}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'.parquet'
-    metadata['spec_path'] = f'{BASE_PATH}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.parquet'
-    metadata['spec_npy_path'] = f'{SPEC_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.npy'
-    if split == "train":
-        metadata['class_label'] = metadata.expert_consensus.map(name2label)
-    return metadata
-
-def process_spec(spec_id, split="train"):
-    """Convert a single spectrogram parquet to .npy, and save the result."""
-    spec_path = f"{BASE_PATH}/{split}_spectrograms/{spec_id}.parquet"
-    spec = pd.read_parquet(spec_path)
-    spec = spec.fillna(0).values[:, 1:].T # fill NaN values with 0, transpose for (Time, Freq) -> (Freq, Time)
-    spec = spec.astype("float32")
-    np.save(f"{SPEC_DIR}/{split}_spectrograms/{spec_id}.npy", spec)
-
-def process_all_specs():
-    """Convert and save all spectrograms. This could be slow."""
-    # Get unique spec_ids of train and valid data
-    metadata_train = metadata_df("train")
-    spec_ids = metadata_train["spectrogram_id"].unique()
-
-    # Parallelize the processing using joblib for training data
-    _ = joblib.Parallel(n_jobs=-1, backend="loky")(
-        joblib.delayed(process_spec)(spec_id, "train")
-        for spec_id in tqdm(spec_ids, total=len(spec_ids))
-    )
-
-    # Get unique spec_ids of test data
-    metadata_test = metadata_df("test")
-    test_spec_ids = metadata_test["spectrogram_id"].unique()
-
-    # Parallelize the processing using joblib for test data
-    _ = joblib.Parallel(n_jobs=-1, backend="loky")(
-        joblib.delayed(process_spec)(spec_id, "test")
-        for spec_id in tqdm(test_spec_ids, total=len(test_spec_ids))
-    )
-    print(f"Saved spectrograms as .npy files in {SPEC_DIR}")
-    
-class SpectrogramDataset(torch.utils.data.Dataset):
-    def __init__(self, metadata_df, item_transforms=None):
-        self.metadata_df = metadata_df
-        self.item_transforms = item_transforms
-        
-    def __len__(self):
-        return len(self.metadata_df)
-    
-    def __getitem__(self, i):
-        npy_path = self.metadata_df["spec_npy_path"].iloc[i]
-        offset = int(self.metadata_df["spectrogram_label_offset_seconds"].iloc[i])
-        tens = torch.from_numpy(np.load(npy_path))[:, offset//2:offset//2+300]
-        if self.item_transforms is not None:
-            tens = self.item_transforms(tens)
-        expert_votes = self.metadata_df[[
-            "seizure_vote", "lpd_vote", "gpd_vote",
-            "lrda_vote", "grda_vote", "other_vote"
-        ]].iloc[i]
-        # target should be float so that nn.KLDivLoss works
-        target = torch.tensor(np.asarray(expert_votes)).float()
-        return tens, target
-    
-class SpectrogramTestDataset(SpectrogramDataset):
-    def __getitem__(self, i):
-        npy_path = self.metadata_df["spec_npy_path"].iloc[i]
-        tens = torch.from_numpy(np.load(npy_path))
-        target = None
-        return tens, target
-        
-#### From models.py 
-from torch import nn
-from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
-
-class Spectrogram_EfficientNet(nn.Module):
-    """An EfficientNetB0 vision model for the spectrogram data."""
-    def __init__(self):
-        super().__init__()
-        self.efficientnet = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-        # freeze pretrained layers besides classifier
-        for param in self.efficientnet.features.parameters():
-            param.requires_grad = False
-        # replace classifier with one of appropriate shape
-        self.efficientnet.classifier = nn.Linear(1280, 6)
-        
-    def forward(self, x):
-        # Convert grayscale images, [batch, H, W], to RGB images, [batch, 3, H, W]
-        return self.efficientnet(x.unsqueeze(1).repeat(1, 3, 1, 1))
-    
-#### From logging.py
-from pathlib import Path
-from datetime import datetime
-
-import numpy as np
-import sklearn
-from sklearn.metrics import fbeta_score
-
-import torch
-from torch.utils.tensorboard import SummaryWriter
-
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-def create_writer(model_name: str) -> SummaryWriter:
-    """Create a SummaryWriter instance saving to a specific log_dir.
-    
-    This allows us to save metric histories, predictions, etc., to TensorBoard.
-    log_dir is formatted as logs/YYYY-MM-DD/model_name.
-    
-    Args:
-      model_name: Name of model.
-    
-    Returns:
-      A SummaryWriter object saving to log_dir.
-    """
-    
-    timestamp = datetime.now().strftime("%Y-%m-%d")
-    log_dir = Path("logs") / timestamp / model_name
-    print(f"Created SummaryWriter saving to {log_dir}.")
-    return SummaryWriter(log_dir=log_dir)
-    
-    
-class MetricsRecorder():
-    def __init__(self):
-        """
-        In here we initialize the values to 0
-        """
-        self.fbeta=0
-        self.loss=0
-        self.accuracy=0
-    def update(self, outputs, labels, loss):
-        """
-        Takes outputs, labels and loss as input and updates the instance variables fbeta, accuracy and loss
-        """
-        labels = labels.to(DEVICE)
-        pred_labels = outputs.detach().to(DEVICE).sigmoid().gt(0.4).int()
-        accuracy = (pred_labels == labels).sum().float().div(labels.size(0)).cpu()
-        self.fbeta += fbeta_score(labels.view(-1).cpu().numpy(),
-                                  pred_labels.view(-1).cpu().numpy(), beta=0.5)
-        self.accuracy += accuracy.item()
-        self.loss += loss.item()
-    def reset(self):
-        """Reset values to 0."""
-        self.fbeta = 0
-        self.loss = 0
-        self.accuracy = 0
-        
-#### From training.py
+### From training.py ###
 from pathlib import Path
 from typing import Optional, List, Tuple, Callable
 import gc
@@ -195,6 +14,7 @@ import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 
 from tqdm.auto import tqdm
+
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -485,3 +305,161 @@ class Trainer():
         model_save_path = MODEL_SAVE_DIR / (self.model_name + "_" + extra + ".pt")
         torch.save(self.model.state_dict(), model_save_path)
         print(f"Saved a checkpoint at {model_save_path}.")
+
+
+### From models.py ###
+from torch import nn
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
+
+class Spectrogram_EfficientNet(nn.Module):
+    """An EfficientNetB0 vision model for the spectrogram data."""
+    def __init__(self):
+        super().__init__()
+        self.efficientnet = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+        # freeze pretrained layers besides classifier
+        for param in self.efficientnet.features.parameters():
+            param.requires_grad = False
+        # replace classifier with one of appropriate shape
+        self.efficientnet.classifier = nn.Linear(1280, 6)
+        
+    def forward(self, x):
+        # Convert grayscale images, [batch, H, W], to RGB images, [batch, 3, H, W]
+        return self.efficientnet(x.unsqueeze(1).repeat(1, 3, 1, 1))
+
+
+### From data_handling.py ###
+from pathlib import Path
+import os
+import numpy as np
+import pandas as pd
+import joblib
+import torch
+from tqdm.auto import tqdm
+
+# BASE_PATH = Path("/kaggle/input/hms-harmful-brain-activity-classification")
+BASE_PATH = Path("data/")
+# SPEC_DIR = Path("/tmp/dataset/hms-hbac")
+SPEC_DIR = Path("data/spectrograms_npy")
+
+class_names = ['Seizure', 'LPD', 'GPD', 'LRDA','GRDA', 'Other']
+label2name = dict(enumerate(class_names))
+name2label = {v:k for k, v in label2name.items()}
+
+def create_spec_npy_dirs():
+    """Create folders to save the spectrogram .npys."""
+    os.makedirs(SPEC_DIR/'train_spectrograms', exist_ok=True)
+    os.makedirs(SPEC_DIR/'test_spectrograms', exist_ok=True)
+    print(f"Created directories {SPEC_DIR/'train_spectrograms'}, {SPEC_DIR/'test_spectrograms'}")
+
+def metadata_df(split="train"):
+    """Return a DataFrame with metadata for the train or test set."""
+    if split not in ["train", "test"]:
+        raise ValueError('Expected split="train" or split="test"')
+    metadata = pd.read_csv(f'{BASE_PATH}/{split}.csv')
+    metadata['eeg_path'] = f'{BASE_PATH}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'.parquet'
+    metadata['spec_path'] = f'{BASE_PATH}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.parquet'
+    metadata['spec_npy_path'] = f'{SPEC_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.npy'
+    if split == "train":
+        metadata['class_label'] = metadata.expert_consensus.map(name2label)
+    return metadata
+
+def process_spec(spec_id, split="train"):
+    """Convert a single spectrogram parquet to .npy, and save the result."""
+    spec_path = f"{BASE_PATH}/{split}_spectrograms/{spec_id}.parquet"
+    spec = pd.read_parquet(spec_path)
+    spec = spec.fillna(0).values[:, 1:].T # fill NaN values with 0, transpose for (Time, Freq) -> (Freq, Time)
+    spec = spec.astype("float32")
+    np.save(f"{SPEC_DIR}/{split}_spectrograms/{spec_id}.npy", spec)
+
+def process_all_specs():
+    """Convert and save all spectrograms. This could be slow."""
+    # Get unique spec_ids of train and valid data
+    metadata_train = metadata_df("train")
+    spec_ids = metadata_train["spectrogram_id"].unique()
+
+    # Parallelize the processing using joblib for training data
+    _ = joblib.Parallel(n_jobs=-1, backend="loky")(
+        joblib.delayed(process_spec)(spec_id, "train")
+        for spec_id in tqdm(spec_ids, total=len(spec_ids))
+    )
+
+    # Get unique spec_ids of test data
+    metadata_test = metadata_df("test")
+    test_spec_ids = metadata_test["spectrogram_id"].unique()
+
+    # Parallelize the processing using joblib for test data
+    _ = joblib.Parallel(n_jobs=-1, backend="loky")(
+        joblib.delayed(process_spec)(spec_id, "test")
+        for spec_id in tqdm(test_spec_ids, total=len(test_spec_ids))
+    )
+    print(f"Saved spectrograms as .npy files in {SPEC_DIR}")
+    
+class SpectrogramDataset(torch.utils.data.Dataset):
+    def __init__(self, metadata_df, item_transforms=None):
+        self.metadata_df = metadata_df
+        self.item_transforms = item_transforms
+        
+    def __len__(self):
+        return len(self.metadata_df)
+    
+    def __getitem__(self, i):
+        npy_path = self.metadata_df["spec_npy_path"].iloc[i]
+        offset = int(self.metadata_df["spectrogram_label_offset_seconds"].iloc[i])
+        tens = torch.from_numpy(np.load(npy_path))[:, offset//2:offset//2+300]
+        if self.item_transforms is not None:
+            tens = self.item_transforms(tens)
+        expert_votes = self.metadata_df[[
+            "seizure_vote", "lpd_vote", "gpd_vote",
+            "lrda_vote", "grda_vote", "other_vote"
+        ]].iloc[i]
+        # target should be float so that nn.KLDivLoss works
+        target = torch.tensor(np.asarray(expert_votes)).float()
+        return tens, target
+    
+class SpectrogramTestDataset(SpectrogramDataset):
+    def __getitem__(self, i):
+        npy_path = self.metadata_df["spec_npy_path"].iloc[i]
+        tens = torch.from_numpy(np.load(npy_path))
+        target = None
+        return tens, target
+        
+        
+    
+        
+
+
+### From logger.py ###
+from pathlib import Path
+from datetime import datetime
+
+import numpy as np
+import sklearn
+
+import torch
+from torch.utils.tensorboard import SummaryWriter
+
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def create_writer(model_name: str) -> SummaryWriter:
+    """Create a SummaryWriter instance saving to a specific log_dir.
+    
+    This allows us to save metric histories, predictions, etc., to TensorBoard.
+    log_dir is formatted as logs/YYYY-MM-DD/model_name.
+    
+    Args:
+      model_name: Name of model.
+    
+    Returns:
+      A SummaryWriter object saving to log_dir.
+    """
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d")
+    log_dir = Path("logs") / timestamp / model_name
+    print(f"Created SummaryWriter saving to {log_dir}.")
+    return SummaryWriter(log_dir=log_dir)
+    
+
+
+
