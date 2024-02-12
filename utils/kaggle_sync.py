@@ -64,8 +64,11 @@ def push_to_kaggle():
 if __name__ == "__main__":
     write_utils_file()
     print("Wrote to utils.py.")
-    push_to_kaggle()
-    print("Pushed to allispaul/utils.")
+    try:
+        push_to_kaggle()
+        print("Pushed to allispaul/utils.")
+    except OSError:
+        print("Could not find kaggle.json. Script not pushed to Kaggle.")
     
     
         
