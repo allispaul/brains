@@ -14,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from tqdm.auto import tqdm
 
-from .logging import create_writer
+from .logger import create_writer
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
