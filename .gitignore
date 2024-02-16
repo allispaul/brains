@@ -1,6 +1,9 @@
 # Data folder
 data/
 
+# Config file
+utils/config.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
