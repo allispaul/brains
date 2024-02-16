@@ -12,6 +12,14 @@ import joblib
 import torch
 from tqdm.auto import tqdm
 
+
+#
+# ~~~ Simple function that reads the convents of a .txt file
+def read_txt(filepath): # ~~~ Tom added this
+    with open(filepath, 'r', encoding='utf-8') as infile:
+        return infile.read()
+
+
 # BASE_PATH = Path("/kaggle/input/hms-harmful-brain-activity-classification")
 BASE_PATH = Path("data/")
 # SPEC_DIR = Path("/tmp/dataset/hms-hbac")
