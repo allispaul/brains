@@ -15,10 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
 from .logger import create_writer
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-MODEL_SAVE_DIR = Path("models")
+from .config import DEVICE, MODEL_SAVE_DIR
 
 
 def cycle(iterable):
@@ -187,6 +184,7 @@ class Trainer():
                 # record number of epochs and training metrics
                 self.histories['epochs'].append(i+1)
                 self.histories['train_loss'].append(total_train_loss / val_period)
+                total_train_loss = 0
 
                 # record learning rate
                 self.histories['lr'].append(self.get_last_lr())

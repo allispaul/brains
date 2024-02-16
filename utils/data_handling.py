@@ -12,6 +12,7 @@ import joblib
 import torch
 from tqdm.auto import tqdm
 
+from .config import BASE_PATH, SPEC_DIR
 
 #
 # ~~~ Simple function that reads the convents of a .txt file
@@ -19,12 +20,7 @@ def read_txt(filepath): # ~~~ Tom added this
     with open(filepath, 'r', encoding='utf-8') as infile:
         return infile.read()
 
-
-# BASE_PATH = Path("/kaggle/input/hms-harmful-brain-activity-classification")
-BASE_PATH = Path("data/")
-# SPEC_DIR = Path("/tmp/dataset/hms-hbac")
-SPEC_DIR = Path("data/spectrograms_npy")
-
+    
 class_names = ['Seizure', 'LPD', 'GPD', 'LRDA','GRDA', 'Other']
 label2name = dict(enumerate(class_names))
 name2label = {v:k for k, v in label2name.items()}

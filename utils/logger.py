@@ -8,8 +8,7 @@ import sklearn
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+from .config import DEVICE, LOG_DIR
 
 
 def create_writer(model_name: str) -> SummaryWriter:
@@ -26,7 +25,7 @@ def create_writer(model_name: str) -> SummaryWriter:
     """
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    log_dir = Path("logs") / timestamp / model_name
+    log_dir = LOG_DIR / timestamp / model_name
     print(f"Created SummaryWriter saving to {log_dir}.")
     return SummaryWriter(log_dir=log_dir)
     

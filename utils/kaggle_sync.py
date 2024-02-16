@@ -32,11 +32,22 @@ def all_utils_txt():
     """Collate the text of all Python files in the utils folder into a single
     string. Strips out module docstrings and internal imports.
     """
-    all_files_txt = "### This file should not be edited directly. Run kaggle_sync.py to rebuild it."
+    all_files_txt = "### This file should not be edited directly. Run kaggle_sync.py to rebuild it.\n"
+    # Config files need to run first
+    for path in ['kaggle_platform.py', 'config.py']:
+        this_file_txt = strip_module_docstring(path)
+        # add separators
+        this_file_txt = f"### From {path.name} ###\n" + this_file_txt + "\n\n\n"
+        # strip internal imports
+        this_file_txt = "\n".join(line for line in this_file_txt.split("\n")
+                                  if not line.startswith("from ."))
+        all_files_txt += this_file_txt
+    # Then all other files (excluding this file, the utils file we're creating,
+    # and __init__)
     for path in Path('.').glob('*.py'):
-        if path.name in ['__init__.py', 'utils.py', 'kaggle_sync.py']:
+        if path.name in ['__init__.py', 'utils.py', 'kaggle_sync.py',
+                         'kaggle_platform.py', 'config.py']:
             continue
-
         this_file_txt = strip_module_docstring(path)
         # add separators
         this_file_txt = f"### From {path.name} ###\n" + this_file_txt + "\n\n\n"
