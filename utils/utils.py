@@ -1,3 +1,44 @@
+### This file should not be edited directly. Run kaggle_sync.py to rebuild it.
+### From kaggle_platform.py ###
+
+### ~~~
+## ~~~ Function that tests whether or not code is being executed in kaggle
+### ~~~
+
+import os
+
+def this_is_running_in_kaggle():
+    try:
+        import kaggle
+        import kaggle_secrets
+        kaggle_packages_found = True
+    except ImportError:
+        kaggle_packages_found = False
+    return ('kaggle' in os.getcwd() and kaggle_packages_found)
+
+# written by Tom
+
+
+
+### From config.py ###
+from pathlib import Path
+import torch
+
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+LOG_DIR = Path("/home/pvk/Documents/python/ML/brains/logs/")
+MODEL_SAVE_DIR = Path("/home/pvk/Documents/python/ML/brains/models/")
+BASE_PATH = Path("data/")
+SPEC_DIR = Path("data/spectrograms_npy")
+
+if this_is_running_in_kaggle():
+    BASE_PATH = Path("/kaggle/input/hms-harmful-brain-activity-classification")
+    SPEC_DIR = Path("/tmp/dataset/hms-hbac")
+    LOG_DIR = Path("/tmp/logs")
+    MODEL_SAVE_DIR = Path("/tmp/models")
+
+
 ### From training.py ###
 from pathlib import Path
 from typing import Optional, List, Tuple, Callable
@@ -15,10 +56,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from tqdm.auto import tqdm
 
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-MODEL_SAVE_DIR = Path("models")
 
 
 def cycle(iterable):
@@ -187,6 +224,7 @@ class Trainer():
                 # record number of epochs and training metrics
                 self.histories['epochs'].append(i+1)
                 self.histories['train_loss'].append(total_train_loss / val_period)
+                total_train_loss = 0
 
                 # record learning rate
                 self.histories['lr'].append(self.get_last_lr())
@@ -336,11 +374,14 @@ import joblib
 import torch
 from tqdm.auto import tqdm
 
-# BASE_PATH = Path("/kaggle/input/hms-harmful-brain-activity-classification")
-BASE_PATH = Path("data/")
-# SPEC_DIR = Path("/tmp/dataset/hms-hbac")
-SPEC_DIR = Path("data/spectrograms_npy")
 
+#
+# ~~~ Simple function that reads the convents of a .txt file
+def read_txt(filepath): # ~~~ Tom added this
+    with open(filepath, 'r', encoding='utf-8') as infile:
+        return infile.read()
+
+    
 class_names = ['Seizure', 'LPD', 'GPD', 'LRDA','GRDA', 'Other']
 label2name = dict(enumerate(class_names))
 name2label = {v:k for k, v in label2name.items()}
@@ -428,6 +469,7 @@ class SpectrogramTestDataset(SpectrogramDataset):
         
 
 
+
 ### From logger.py ###
 from pathlib import Path
 from datetime import datetime
@@ -438,8 +480,6 @@ import sklearn
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def create_writer(model_name: str) -> SummaryWriter:
@@ -456,7 +496,7 @@ def create_writer(model_name: str) -> SummaryWriter:
     """
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    log_dir = Path("logs") / timestamp / model_name
+    log_dir = LOG_DIR / timestamp / model_name
     print(f"Created SummaryWriter saving to {log_dir}.")
     return SummaryWriter(log_dir=log_dir)
     

@@ -34,7 +34,7 @@ def all_utils_txt():
     """
     all_files_txt = "### This file should not be edited directly. Run kaggle_sync.py to rebuild it.\n"
     # Config files need to run first
-    for path in ['kaggle_platform.py', 'config.py']:
+    for path in [Path('kaggle_platform.py'), Path('config.py')]:
         this_file_txt = strip_module_docstring(path)
         # add separators
         this_file_txt = f"### From {path.name} ###\n" + this_file_txt + "\n\n\n"
