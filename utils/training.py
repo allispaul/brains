@@ -39,7 +39,7 @@ class Trainer():
                  val_loader: data.DataLoader,
                  *,
                  optimizer: type[torch.optim.Optimizer] = optim.SGD,
-                 criterion: nn.Module = nn.KLDivLoss(),
+                 criterion: nn.Module = nn.KLDivLoss(reduction="mean"),
                  lr: float = 0.03,
                  scheduler: Optional[type[torch.optim.lr_scheduler]] = None,
                  writer: SummaryWriter | str | None = None,
