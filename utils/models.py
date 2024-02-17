@@ -12,7 +12,9 @@ class Spectrogram_EfficientNet(nn.Module):
             param.requires_grad = False
         # replace classifier with one of appropriate shape
         self.efficientnet.classifier = nn.Linear(1280, 6)
+        # make model output log-probabilities
+        self.activation = nn.LogSoftmax(dim=1)
         
     def forward(self, x):
         # Convert grayscale images, [batch, H, W], to RGB images, [batch, 3, H, W]
-        return self.efficientnet(x.unsqueeze(1).repeat(1, 3, 1, 1))
+        return self.activation(self.efficientnet(x.unsqueeze(1).repeat(1, 3, 1, 1)))
