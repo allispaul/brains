@@ -93,7 +93,7 @@ class Trainer():
             )
             
         self.histories = {
-            'epochs': [],
+            'batches': [],
             'train_loss': [],
             'val_loss': [],
             'lr': []
@@ -137,25 +137,25 @@ class Trainer():
             val_loss = self.criterion(val_outputs, y.to(DEVICE))
         return val_outputs, val_loss
     
-    def train_eval_loop(self, epochs, val_epochs, val_period: int = 500,
+    def train_eval_loop(self, batches, val_batches, val_period: int = 500,
                         save_period: int | None = None):
-        """Train model for a given number of epochs, performing validation
+        """Train model for a given number of batches, performing validation
         periodically.
         
-        Train the model on a number of training batches given by epochs. Every
+        Train the model on a number of training batches given by batches. Every
         val_period training batches, pause training and perform validation on
-        val_epochs batches from the validation set. Each time validation is
+        val_batches batches from the validation set. Each time validation is
         performed, the model's loss, accuracy, and F0.5 scores are saved to the
         trainer, and optionally written to TensorBoard. Optionally, periodically
         save a copy of the model.
         
         Args:
-          epochs: Number of training batches to use.
-          val_epochs: Number of validation batches to use each time validation
+          batches: Number of training batches to use.
+          val_batches: Number of validation batches to use each time validation
             is performed.
-          val_period: Number of epochs to train for in between each occurrence
+          val_period: Number of batches to train for in between each occurrence
             of validation (default 500).
-          save_period: Number of epochs to train for before saving another copy
+          save_period: Number of batches to train for before saving another copy
             of the model (default None, meaning that the model is not saved).
         """
         # Note, this scheduler should not be used if one plans to call
@@ -163,10 +163,10 @@ class Trainer():
         
         # It doesn't make sense to have more validation steps than batches in
         # the validation set
-        val_epochs = min(val_epochs, len(self.val_loader))
-        # estimate total epochs
-        total_epochs = epochs + ((epochs // val_period) * val_epochs)
-        pbar = tqdm(total=total_epochs, desc="Training")
+        val_batches = min(val_batches, len(self.val_loader))
+        # estimate total batches
+        total_batches = batches + ((batches // val_period) * val_batches)
+        pbar = tqdm(total=total_batches, desc="Training")
         
         # Initialize iterator for validation set -- used to continue validation
         # loop from where it left off
@@ -176,13 +176,13 @@ class Trainer():
         total_train_loss = 0
         for i, (X, y) in enumerate(cycle(self.train_loader)):
             pbar.update()
-            if i >= epochs:
+            if i >= batches:
                 break
             outputs, loss = self.train_step(X, y)
             total_train_loss += loss.item()
             if (i + 1) % val_period == 0:
-                # record number of epochs and training metrics
-                self.histories['epochs'].append(i+1)
+                # record number of batches and training metrics
+                self.histories['batches'].append(i+1)
                 self.histories['train_loss'].append(total_train_loss / val_period)
                 total_train_loss = 0
 
@@ -194,7 +194,7 @@ class Trainer():
                 total_val_loss = 0
                 for j, (val_X, val_y) in enumerate(val_iterator):
                     pbar.update()
-                    if j >= val_epochs:
+                    if j >= val_batches:
                         break
                     val_outputs, val_loss = self.val_step(val_X, val_y)
                     total_val_loss += val_loss.item()
@@ -220,26 +220,26 @@ class Trainer():
                     
                 # If loss is NaN, the model died and we might as well stop training.
                 if np.isnan(self.histories['val_loss'][-1]) or np.isnan(self.histories['train_loss'][-1]):
-                    print (f"Model died at training epoch {i+1}, stopping training.")
+                    print (f"Model died at training batch {i+1}, stopping training.")
                     break
                     
             # Optionally save a copy of the model
             if save_period is not None and (i + 1) % save_period == 0:
-                self.save_checkpoint(f"{i+1}_epochs")
+                self.save_checkpoint(f"{i+1}_batches")
                 
-    def train_loop_simple(self, epochs):
-        """Train model for a given number of epochs.
+    def train_loop_simple(self, batches):
+        """Train model for a given number of batches.
         
         I made this to diagnose the memory issues. It's an extremely simple
         version of the training loop, without any extra functionality.
         
         Args:
-          epochs: Number of training batches to use.
+          batches: Number of training batches to use.
         """
         
         self.model.train()
         for i, (X, y) in enumerate(cycle(self.train_loader)):
-            if i >= epochs:
+            if i >= batches:
                 break
             self.optimizer.zero_grad()
             outputs = self.model(X.to(DEVICE))
@@ -283,9 +283,9 @@ class Trainer():
         """
         if ax is None:
             ax = plt.gca()
-        plt.plot(self.histories['epochs'], self.histories['train_loss'], label="training")
-        plt.plot(self.histories['epochs'], self.histories['val_loss'], label="validation")
-        plt.xlabel('epoch')
+        plt.plot(self.histories['batches'], self.histories['train_loss'], label="training")
+        plt.plot(self.histories['batches'], self.histories['val_loss'], label="validation")
+        plt.xlabel('Batch')
         plt.ylabel('loss')
         plt.title("Loss")
         plt.legend()
