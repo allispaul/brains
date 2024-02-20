@@ -45,6 +45,8 @@ def metadata_df(split="train"):
 
 def process_spec(spec_id, split="train"):
     """Convert a single spectrogram parquet to .npy, and save the result."""
+    if split not in ["train", "test"]:
+        raise ValueError('Expected split="train" or split="test"')
     spec_path = f"{BASE_PATH}/{split}_spectrograms/{spec_id}.parquet"
     spec = pd.read_parquet(spec_path)
     spec = spec.fillna(0).values[:, 1:].T # fill NaN values with 0, transpose for (Time, Freq) -> (Freq, Time)
