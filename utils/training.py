@@ -12,6 +12,10 @@ import torch.optim as optim
 import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 
+import warnings
+# Ignore PyTorch's KLDivLoss warning
+warnings.simplefilter("ignore", category=UserWarning, lineno=2949)
+
 from tqdm.auto import tqdm
 
 from .logger import create_writer
