@@ -79,7 +79,7 @@ class Trainer():
                  val_loader: data.DataLoader,
                  *,
                  optimizer: type[torch.optim.Optimizer] = optim.SGD,
-                 criterion: nn.Module = nn.KLDivLoss(),
+                 criterion: nn.Module = nn.KLDivLoss(reduction="mean"),
                  lr: float = 0.03,
                  scheduler: Optional[type[torch.optim.lr_scheduler]] = None,
                  writer: SummaryWriter | str | None = None,
@@ -133,7 +133,7 @@ class Trainer():
             )
             
         self.histories = {
-            'epochs': [],
+            'batches': [],
             'train_loss': [],
             'val_loss': [],
             'lr': []
@@ -177,25 +177,25 @@ class Trainer():
             val_loss = self.criterion(val_outputs, y.to(DEVICE))
         return val_outputs, val_loss
     
-    def train_eval_loop(self, epochs, val_epochs, val_period: int = 500,
+    def train_eval_loop(self, batches, val_batches, val_period: int = 500,
                         save_period: int | None = None):
-        """Train model for a given number of epochs, performing validation
+        """Train model for a given number of batches, performing validation
         periodically.
         
-        Train the model on a number of training batches given by epochs. Every
+        Train the model on a number of training batches given by batches. Every
         val_period training batches, pause training and perform validation on
-        val_epochs batches from the validation set. Each time validation is
+        val_batches batches from the validation set. Each time validation is
         performed, the model's loss, accuracy, and F0.5 scores are saved to the
         trainer, and optionally written to TensorBoard. Optionally, periodically
         save a copy of the model.
         
         Args:
-          epochs: Number of training batches to use.
-          val_epochs: Number of validation batches to use each time validation
+          batches: Number of training batches to use.
+          val_batches: Number of validation batches to use each time validation
             is performed.
-          val_period: Number of epochs to train for in between each occurrence
+          val_period: Number of batches to train for in between each occurrence
             of validation (default 500).
-          save_period: Number of epochs to train for before saving another copy
+          save_period: Number of batches to train for before saving another copy
             of the model (default None, meaning that the model is not saved).
         """
         # Note, this scheduler should not be used if one plans to call
@@ -203,10 +203,10 @@ class Trainer():
         
         # It doesn't make sense to have more validation steps than batches in
         # the validation set
-        val_epochs = min(val_epochs, len(self.val_loader))
-        # estimate total epochs
-        total_epochs = epochs + ((epochs // val_period) * val_epochs)
-        pbar = tqdm(total=total_epochs, desc="Training")
+        val_batches = min(val_batches, len(self.val_loader))
+        # estimate total batches
+        total_batches = batches + ((batches // val_period) * val_batches)
+        pbar = tqdm(total=total_batches, desc="Training")
         
         # Initialize iterator for validation set -- used to continue validation
         # loop from where it left off
@@ -216,13 +216,13 @@ class Trainer():
         total_train_loss = 0
         for i, (X, y) in enumerate(cycle(self.train_loader)):
             pbar.update()
-            if i >= epochs:
+            if i >= batches:
                 break
             outputs, loss = self.train_step(X, y)
             total_train_loss += loss.item()
             if (i + 1) % val_period == 0:
-                # record number of epochs and training metrics
-                self.histories['epochs'].append(i+1)
+                # record number of batches and training metrics
+                self.histories['batches'].append(i+1)
                 self.histories['train_loss'].append(total_train_loss / val_period)
                 total_train_loss = 0
 
@@ -234,7 +234,7 @@ class Trainer():
                 total_val_loss = 0
                 for j, (val_X, val_y) in enumerate(val_iterator):
                     pbar.update()
-                    if j >= val_epochs:
+                    if j >= val_batches:
                         break
                     val_outputs, val_loss = self.val_step(val_X, val_y)
                     total_val_loss += val_loss.item()
@@ -260,26 +260,26 @@ class Trainer():
                     
                 # If loss is NaN, the model died and we might as well stop training.
                 if np.isnan(self.histories['val_loss'][-1]) or np.isnan(self.histories['train_loss'][-1]):
-                    print (f"Model died at training epoch {i+1}, stopping training.")
+                    print (f"Model died at training batch {i+1}, stopping training.")
                     break
                     
             # Optionally save a copy of the model
             if save_period is not None and (i + 1) % save_period == 0:
-                self.save_checkpoint(f"{i+1}_epochs")
+                self.save_checkpoint(f"{i+1}_batches")
                 
-    def train_loop_simple(self, epochs):
-        """Train model for a given number of epochs.
+    def train_loop_simple(self, batches):
+        """Train model for a given number of batches.
         
         I made this to diagnose the memory issues. It's an extremely simple
         version of the training loop, without any extra functionality.
         
         Args:
-          epochs: Number of training batches to use.
+          batches: Number of training batches to use.
         """
         
         self.model.train()
         for i, (X, y) in enumerate(cycle(self.train_loader)):
-            if i >= epochs:
+            if i >= batches:
                 break
             self.optimizer.zero_grad()
             outputs = self.model(X.to(DEVICE))
@@ -323,9 +323,9 @@ class Trainer():
         """
         if ax is None:
             ax = plt.gca()
-        plt.plot(self.histories['epochs'], self.histories['train_loss'], label="training")
-        plt.plot(self.histories['epochs'], self.histories['val_loss'], label="validation")
-        plt.xlabel('epoch')
+        plt.plot(self.histories['batches'], self.histories['train_loss'], label="training")
+        plt.plot(self.histories['batches'], self.histories['val_loss'], label="validation")
+        plt.xlabel('Batch')
         plt.ylabel('loss')
         plt.title("Loss")
         plt.legend()
@@ -359,10 +359,12 @@ class Spectrogram_EfficientNet(nn.Module):
             param.requires_grad = False
         # replace classifier with one of appropriate shape
         self.efficientnet.classifier = nn.Linear(1280, 6)
+        # make model output log-probabilities
+        self.activation = nn.LogSoftmax(dim=1)
         
     def forward(self, x):
         # Convert grayscale images, [batch, H, W], to RGB images, [batch, 3, H, W]
-        return self.efficientnet(x.unsqueeze(1).repeat(1, 3, 1, 1))
+        return self.activation(self.efficientnet(x.unsqueeze(1).repeat(1, 3, 1, 1)))
 
 
 ### From data_handling.py ###
@@ -406,6 +408,8 @@ def metadata_df(split="train"):
 
 def process_spec(spec_id, split="train"):
     """Convert a single spectrogram parquet to .npy, and save the result."""
+    if split not in ["train", "test"]:
+        raise ValueError('Expected split="train" or split="test"')
     spec_path = f"{BASE_PATH}/{split}_spectrograms/{spec_id}.parquet"
     spec = pd.read_parquet(spec_path)
     spec = spec.fillna(0).values[:, 1:].T # fill NaN values with 0, transpose for (Time, Freq) -> (Freq, Time)
@@ -436,9 +440,31 @@ def process_all_specs():
     print(f"Saved spectrograms as .npy files in {SPEC_DIR}")
     
 class SpectrogramDataset(torch.utils.data.Dataset):
-    def __init__(self, metadata_df, item_transforms=None):
-        self.metadata_df = metadata_df
+    """Dataset with only spectrogram data.
+    
+    Args:
+      metadata_df: DataFrame containing spectrogram offsets, paths to .npy
+        files, and vote labels.
+      n_items (optional): If not None, generate a dataset with this many items
+        by selecting a random subset of metadata_df.
+      item_transforms (optional): Transforms to be applied to each item before
+        returning it.
+      preloaded (default False): whether to load every spectrogram into memory at
+        initialization. I estimate that this uses 5-6 GB of RAM and is about
+        15% faster during training and 10% faster during inference.
+    """
+    def __init__(self, metadata_df, n_items=None, item_transforms=None,
+                 preloaded=False):
+        if n_items is not None:
+            self.metadata_df = metadata_df.sample(n=n_items).copy()
+        else:
+            self.metadata_df = metadata_df
         self.item_transforms = item_transforms
+        if preloaded:
+            self.spec_dict = {npy_path: torch.from_numpy(np.load(npy_path))
+                              for npy_path in self.metadata_df.spec_npy_path.unique()}
+        else:
+            self.spec_dict = None
         
     def __len__(self):
         return len(self.metadata_df)
@@ -446,7 +472,10 @@ class SpectrogramDataset(torch.utils.data.Dataset):
     def __getitem__(self, i):
         npy_path = self.metadata_df["spec_npy_path"].iloc[i]
         offset = int(self.metadata_df["spectrogram_label_offset_seconds"].iloc[i])
-        tens = torch.from_numpy(np.load(npy_path))[:, offset//2:offset//2+300]
+        if self.spec_dict is not None:
+            tens = self.spec_dict[npy_path][:, offset//2:offset//2+300]
+        else:
+            tens = torch.from_numpy(np.load(npy_path))[:, offset//2:offset//2+300]
         if self.item_transforms is not None:
             tens = self.item_transforms(tens)
         expert_votes = self.metadata_df[[
@@ -463,11 +492,47 @@ class SpectrogramTestDataset(SpectrogramDataset):
         tens = torch.from_numpy(np.load(npy_path))
         target = None
         return tens, target
-        
-        
-    
-        
 
+
+### From visualization.py ###
+
+def visualize_spectrogram(item, *, figsize=(15, 12), label_spacing=6, colorbars=True):
+    """Visualize a spectrogram.
+    
+    Args:
+      item: Spectrogram to visualize, as a np.array or torch.Tensor of shape
+        [400, *].
+      figsize (default (10, 8)): Size of matplotlib figure.
+      label_spacing (default 6): Spacing between y-axis labels.
+      colorbars (default True): Whether to include colorbars.
+    """
+    # Thanks to https://www.kaggle.com/code/alejopaullier/hms-efficientnetb0-pytorch-train#%7C-Utils-%E2%86%91
+    item = torch.clamp(item, 1e-4, 1e7)
+    item = torch.log(item)
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
+    axsflat = axs.flatten()
+    regions = ["LL", "RL", "LP", "RP"]
+    freqs = [0.59, 0.78, 0.98, 1.17, 1.37, 1.56, 1.76, 1.95, 2.15, 2.34, 2.54,
+             2.73, 2.93, 3.13, 3.32, 3.52, 3.71, 3.91, 4.1, 4.3, 4.49, 4.69,
+             4.88, 5.08, 5.27, 5.47, 5.66, 5.86, 6.05, 6.25, 6.45, 6.64, 6.84,
+             7.03, 7.23, 7.42, 7.62, 7.81, 8.01, 8.2, 8.4, 8.59, 8.79, 8.98,
+             9.18, 9.38, 9.57, 9.77, 9.96, 10.16, 10.35, 10.55, 10.74, 10.94,
+             11.13, 11.33, 11.52, 11.72, 11.91, 12.11, 12.3, 12.5, 12.7, 12.89,
+             13.09, 13.28, 13.48, 13.67, 13.87, 14.06, 14.26, 14.45, 14.65, 14.84,
+             15.04, 15.23, 15.43, 15.63, 15.82, 16.02, 16.21, 16.41, 16.6, 16.8,
+             16.99, 17.19, 17.38, 17.58, 17.77, 17.97, 18.16, 18.36, 18.55, 18.75,
+             18.95, 19.14, 19.34, 19.53, 19.73,]
+    for i in range(4):
+        img = axsflat[i].imshow(item[i*100:(i+1)*100], aspect="auto", origin="lower")
+        axsflat[i].set_title(regions[i])
+        axsflat[i].set_yticks(np.arange(0, len(freqs), label_spacing))
+        axsflat[i].set_yticklabels(freqs[::label_spacing])
+        if colorbars:
+            cbar = fig.colorbar(img, ax=axsflat[i])
+            cbar.set_label('Log(Value)')
+        axsflat[i].set_ylabel("Frequency (Hz)")
+        axsflat[i].set_xlabel("Time")
+    plt.tight_layout()
 
 
 ### From logger.py ###
