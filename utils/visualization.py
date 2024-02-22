@@ -1,6 +1,9 @@
 """Tools for data visualization."""
+import numpy as np
+import torch
+from matplotlib import pyplot as plt
 
-def visualize_spectrogram(item, *, figsize=(15, 12), label_spacing=6, colorbars=True):
+def visualize_spectrogram(item, *, figsize=(10, 8), label_spacing=6, colorbars=True):
     """Visualize a spectrogram.
     
     Args:
