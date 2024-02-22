@@ -4,6 +4,9 @@ data/
 # Config file
 utils/config.py
 
+# Auto-generated utils file
+utils/utils.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
