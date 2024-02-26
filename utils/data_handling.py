@@ -27,9 +27,23 @@ name2label = {v:k for k, v in label2name.items()}
 
 def create_spec_npy_dirs():
     """Create folders to save the spectrogram .npys."""
+    already_exists_train = os.path.exists(SPEC_DIR/'train_spectrograms')
+    already_exists_test = os.path.exists(SPEC_DIR/'test_spectrograms')
+    #
+    # ~~~ Paul's code
     os.makedirs(SPEC_DIR/'train_spectrograms', exist_ok=True)
     os.makedirs(SPEC_DIR/'test_spectrograms', exist_ok=True)
-    print(f"Created directories {SPEC_DIR/'train_spectrograms'}, {SPEC_DIR/'test_spectrograms'}")
+    # ~~~ End Paul's code
+    #
+    # ~~~ Tom added the following print logic
+    if already_exists_train:
+        print(f"Directory {SPEC_DIR/'train_spectrograms'} already existed")
+    else:
+        print(f"Created directory {SPEC_DIR/'train_spectrograms'}")
+    if already_exists_train:
+        print(f"Directory {SPEC_DIR/'test_spectrograms'} already existed")
+    else:
+        print(f"Created directory {SPEC_DIR/'test_spectrograms'}")
 
 def metadata_df(split="train"):
     """Return a DataFrame with metadata for the train or test set."""
