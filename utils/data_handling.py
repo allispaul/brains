@@ -51,6 +51,7 @@ def metadata_df(split="train"):
         raise ValueError('Expected split="train" or split="test"')
     metadata = pd.read_csv(f'{BASE_PATH}/{split}.csv')
     metadata['eeg_path'] = f'{BASE_PATH}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'.parquet'
+    # metadata['eeg_path'] = [os.path.join( BASE_PATH, f"{split}_eegs", f"{id}.parquet" ) for id in metadata['eeg_id']]
     metadata['spec_path'] = f'{BASE_PATH}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.parquet'
     metadata['spec_npy_path'] = f'{SPEC_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.npy'
     if split == "train":
@@ -105,12 +106,13 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         15% faster during training and 10% faster during inference.
     """
     def __init__(self, metadata_df, n_items=None, item_transforms=None,
-                 preloaded=False):
+                 preloaded=False, normalize=False):
         if n_items is not None:
             self.metadata_df = metadata_df.sample(n=n_items).copy()
         else:
             self.metadata_df = metadata_df
         self.item_transforms = item_transforms
+        self.normalize = normalize
         if preloaded:
             self.spec_dict = {npy_path: torch.from_numpy(np.load(npy_path))
                               for npy_path in self.metadata_df.spec_npy_path.unique()}
@@ -135,6 +137,8 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         ]].iloc[i]
         # target should be float so that nn.KLDivLoss works
         target = torch.tensor(np.asarray(expert_votes)).float()
+        if self.normalize:
+            target /= target.sum()
         return tens, target
     
 class SpectrogramTestDataset(SpectrogramDataset):
