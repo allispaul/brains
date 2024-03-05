@@ -6,14 +6,19 @@ from torchvision import transforms
 import torchvision.transforms.v2.functional as F
 
 class Spectrogram_EfficientNet(nn.Module):
-    """An EfficientNetB0 vision model for the spectrogram data."""
-    def __init__(self):
+    """An EfficientNetB0 vision model for the spectrogram data.
+    
+    Parameters:
+      frozen (default True): Whether to freeze the model's pretrained layers.
+    """
+    def __init__(self, frozen=True):
         super().__init__()
         self.preprocessor = SpectrogramPreprocessor()
         self.efficientnet = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-        # freeze pretrained layers besides classifier
-        for param in self.efficientnet.features.parameters():
-            param.requires_grad = False
+        if frozen:
+            # freeze pretrained layers besides classifier
+            for param in self.efficientnet.features.parameters():
+                param.requires_grad = False
         # replace classifier with one of appropriate shape
         self.efficientnet.classifier = nn.Linear(1280, 6)
         # make model output log-probabilities
