@@ -1,4 +1,5 @@
 
+import warnings
 import sys
 import numpy as np
 import pandas as pd
@@ -13,21 +14,21 @@ except:
 
 metadata = metadata_df("train")
 
+def raw_spec(id):
+    return pd.read_parquet(metadata.iloc[id].spec_path)
+
+def raw_eeg(id):
+    return pd.read_parquet(metadata.iloc[id].eeg_path)
+
 def get_item( id, item="spectrogram", metadata=metadata, center=True, to_tensor=True ):
     #
     # ~~~ Get either the spectrogram, the eeg, or the eeg with timestamps, depending on the `item` arg
-    assert item=="spectrogram" or item=="eeg" or item=="raw"
-    if item=="spectrogram":
-        got = np.load(metadata["spec_npy_path"].iloc[id])
-    else:
-        got = pd.read_parquet(metadata.iloc[id].eeg_path)
-        # ~~~ pd.read_parquet(metadata.iloc[id].spec_path) would analogously give the raw spctrogram data
-        if item=="eeg":
-            got = got.values
+    assert item=="spectrogram" or item=="eeg"
+    got = np.load(metadata["spec_npy_path"].iloc[id]) if item=="spectrogram" else pd.read_parquet(metadata.iloc[id].eeg_path).values
     #
     # ~~~ Crop for only the time frame as in the image shown here https://www.kaggle.com/competitions/hms-harmful-brain-activity-classification/discussion/468010
-    offset = None if item=="raw" else int(metadata[f"{item}_label_offset_seconds"].iloc[id])
-    if center and item!="raw":
+    offset = int(metadata[f"{item}_label_offset_seconds"].iloc[id])
+    if center:
         start = offset//2
         width = 300 if item=="spectrogram" else 25
         got = got[:, start:(start+width)]
@@ -40,60 +41,13 @@ def get_item( id, item="spectrogram", metadata=metadata, center=True, to_tensor=
     label = metadata["expert_consensus"].iloc[id]
     #
     # ~~~ Convert to torch.tensors if desired
-    if to_tensor and item!="raw":
+    if to_tensor:
         got = torch.from_numpy(got)
         votes = torch.from_numpy(votes)
     #
     # ~~~ Return (i) the data, (ii) what the experts voted, (iii) the result of the vote, and (iv) the index that we started with
     return got, votes, label, offset
 
-
-class SpectrogramDataset(torch.utils.data.Dataset):
-    """Dataset with only spectrogram data.
-    
-    Args:
-      metadata_df: DataFrame containing spectrogram offsets, paths to .npy
-        files, and vote labels.
-      n_items (optional): If not None, generate a dataset with this many items
-        by selecting a random subset of metadata_df.
-      item_transforms (optional): Transforms to be applied to each item before
-        returning it.
-      preloaded (default False): whether to load every spectrogram into memory at
-        initialization. I estimate that this uses 5-6 GB of RAM and is about
-        15% faster during training and 10% faster during inference.
-    """
-    def __init__( self, metadata_df, n_items=None, item_transforms=None, preloaded=False ):
-        if n_items is not None:
-            self.metadata_df = metadata_df.sample(n=n_items).copy()
-        else:
-            self.metadata_df = metadata_df
-        self.item_transforms = item_transforms
-        if preloaded:
-            self.spec_dict = {npy_path: torch.from_numpy(np.load(npy_path))
-                              for npy_path in self.metadata_df.spec_npy_path.unique()}
-        else:
-            self.spec_dict = None
-        
-    def __len__(self):
-        return len(self.metadata_df)
-    
-    def __getitem__(self, i):
-        npy_path = self.metadata_df["spec_npy_path"].iloc[i]
-        offset = int(self.metadata_df["spectrogram_label_offset_seconds"].iloc[i])
-        if self.spec_dict is not None:
-            tens = self.spec_dict[npy_path][:, offset//2:offset//2+300]
-        else:
-            tens = torch.from_numpy(np.load(npy_path))[:, offset//2:offset//2+300]
-        if self.item_transforms is not None:
-            tens = self.item_transforms(tens)
-        expert_votes = self.metadata_df[[
-            "seizure_vote", "lpd_vote", "gpd_vote",
-            "lrda_vote", "grda_vote", "other_vote"
-        ]].iloc[i]
-        # target should be float so that nn.KLDivLoss works
-        target = torch.tensor(np.asarray(expert_votes)).float()
-        return tens, target
-    
 
 
 def get_spec( *args, **kwargs ):
@@ -103,9 +57,6 @@ def get_spec( *args, **kwargs ):
 def get_eeg( *args, **kwargs ):
     return get_item( *args, item="eeg", **kwargs )
 
-
-def get_raw( *args, **kwargs ):
-    return get_item( *args, item="raw", **kwargs )
 
 #
 # ~~~ Build the path to the .npy file from the spec_id

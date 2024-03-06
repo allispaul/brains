@@ -105,14 +105,22 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         initialization. I estimate that this uses 5-6 GB of RAM and is about
         15% faster during training and 10% faster during inference.
     """
-    def __init__(self, metadata_df, n_items=None, item_transforms=None,
-                 preloaded=False, normalize=False):
+    def __init__(
+            self,
+            metadata_df,
+            n_items=None,
+            item_transforms=None,
+            preloaded=False,
+            normalize_targets=False,
+            dtype =  torch.get_default_dtype()
+        ):
         if n_items is not None:
             self.metadata_df = metadata_df.sample(n=n_items).copy()
         else:
             self.metadata_df = metadata_df
         self.item_transforms = item_transforms
-        self.normalize = normalize
+        self.normalize_targets = normalize_targets
+        self.dtype = dtype
         if preloaded:
             self.spec_dict = {npy_path: torch.from_numpy(np.load(npy_path))
                               for npy_path in self.metadata_df.spec_npy_path.unique()}
@@ -137,9 +145,9 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         ]].iloc[i]
         # target should be float so that nn.KLDivLoss works
         target = torch.tensor(np.asarray(expert_votes)).float()
-        if self.normalize:
+        if self.normalize_targets:
             target /= target.sum()
-        return tens, target
+        return tens.to(self.dtype), target.to(self.dtype)
     
 class SpectrogramTestDataset(SpectrogramDataset):
     def __getitem__(self, i):
