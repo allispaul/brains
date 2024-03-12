@@ -4,6 +4,7 @@ from torch import nn
 from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 from torchvision import transforms
 import torchvision.transforms.v2.functional as F
+from urllib.error import URLError
 
 class Spectrogram_EfficientNet(nn.Module):
     """An EfficientNetB0 vision model for the spectrogram data.
@@ -14,7 +15,12 @@ class Spectrogram_EfficientNet(nn.Module):
     def __init__(self, frozen=True):
         super().__init__()
         self.preprocessor = SpectrogramPreprocessor()
-        self.efficientnet = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+        try:
+            self.efficientnet = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+        except URLError:
+            # If no internet connection, don't load pretrained weights
+            self.efficientnet = efficientnet_b0()
+            
         if frozen:
             # freeze pretrained layers besides classifier
             for param in self.efficientnet.features.parameters():
