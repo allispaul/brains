@@ -10,7 +10,7 @@ defaults:
     working-directory: utils
 
 jobs:
-  example-job:
+  push-to-kaggle:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository to the runner
