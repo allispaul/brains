@@ -1,0 +1,29 @@
+name: Push to Kaggle
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - utils/**
+
+defaults:
+  run:
+    working-directory: utils
+
+jobs:
+  example-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+      - name: Run Python script
+        env:
+          # Do not leak your credentials.
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          python -m pip install kaggle
+          python kaggle_sync.py
