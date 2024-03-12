@@ -70,14 +70,19 @@ def push_to_kaggle():
     $HOME/.kaggle/kaggle.json.)"""
     api = KaggleApi()
     api.authenticate()
-    api.kernels_push(".")
+    response = api.kernels_push(".")
+    print(f"Pushed version number {response.versionNumber} to {response.url}.")
+    if response.hasError:
+        print(f"Push returned error:")
+        print(response.error)
+
     
 if __name__ == "__main__":
     write_utils_file()
     print("Wrote to utils.py.")
     try:
+        print("Pushing to allispaul/utils.")
         push_to_kaggle()
-        print("Pushed to allispaul/utils.")
     except OSError:
         print("Could not find kaggle.json. Script not pushed to Kaggle.")
     
