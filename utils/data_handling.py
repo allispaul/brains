@@ -153,5 +153,5 @@ class SpectrogramTestDataset(SpectrogramDataset):
     def __getitem__(self, i):
         npy_path = self.metadata_df["spec_npy_path"].iloc[i]
         tens = torch.from_numpy(np.load(npy_path))
-        target = None
+        target = torch.tensor([1., 1., 1., 1., 1.])  # dummy values
         return tens, target
