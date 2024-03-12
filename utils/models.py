@@ -11,13 +11,14 @@ class Spectrogram_EfficientNet(nn.Module):
     
     Parameters:
       frozen (default True): Whether to freeze the model's pretrained layers.
+      download (default True): Whether to download pretrained weights.
     """
-    def __init__(self, frozen=True):
+    def __init__(self, frozen=True, download=True):
         super().__init__()
         self.preprocessor = SpectrogramPreprocessor()
-        try:
+        if download:
             self.efficientnet = efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
-        except URLError:
+        else:
             # If no internet connection, don't load pretrained weights
             self.efficientnet = efficientnet_b0()
             
