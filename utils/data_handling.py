@@ -153,7 +153,7 @@ class SpectrogramDataset(torch.utils.data.Dataset):
             n_items=None,
             item_transforms=None,
             preloaded=False,
-            normalize_targets=False,
+            normalize_targets=True,
             dtype =  torch.get_default_dtype()
         ):
         if n_items is not None:
@@ -207,7 +207,7 @@ class EegDataset(torch.utils.data.Dataset):
             n_items=None,
             item_transforms=None,
             preloaded=False,
-            normalize_targets=False,
+            normalize_targets=True,
             dtype=torch.get_default_dtype()
         ):
         if n_items is not None:
