@@ -12,7 +12,7 @@ import joblib
 import torch
 from tqdm.auto import tqdm
 
-from .config import BASE_PATH, SPEC_DIR
+from .config import BASE_PATH, SPEC_DIR, EEG_DIR
 
 #
 # ~~~ Simple function that reads the convents of a .txt file
@@ -27,33 +27,43 @@ name2label = {v:k for k, v in label2name.items()}
 
 def create_spec_npy_dirs():
     """Create folders to save the spectrogram .npys."""
-    already_exists_train = os.path.exists(SPEC_DIR/'train_spectrograms')
-    already_exists_test = os.path.exists(SPEC_DIR/'test_spectrograms')
-    #
-    # ~~~ Paul's code
-    os.makedirs(SPEC_DIR/'train_spectrograms', exist_ok=True)
-    os.makedirs(SPEC_DIR/'test_spectrograms', exist_ok=True)
-    # ~~~ End Paul's code
-    #
-    # ~~~ Tom added the following print logic
-    if already_exists_train:
-        print(f"Directory {SPEC_DIR/'train_spectrograms'} already existed")
+    train_spec_path = SPEC_DIR/'train_spectrograms'
+    test_spec_path = SPEC_DIR/'test_spectrograms'
+    if os.path.exists(train_spec_path):
+        print(f"Directory {train_spec_path} already existed")
     else:
-        print(f"Created directory {SPEC_DIR/'train_spectrograms'}")
-    if already_exists_train:
-        print(f"Directory {SPEC_DIR/'test_spectrograms'} already existed")
+        os.makedirs(train_spec_path)
+        print(f"Created directory {train_spec_path}")
+    if os.path.exists(test_spec_path):
+        print(f"Directory {test_spec_path} already existed")
     else:
-        print(f"Created directory {SPEC_DIR/'test_spectrograms'}")
-
+        os.makedirs(test_spec_path)
+        print(f"Created directory {test_spec_path}")
+        
+def create_eeg_npy_dirs():
+    """Create folders to save the eeg .npys."""
+    train_eeg_path = EEG_DIR/'train_eegs'
+    test_eeg_path = EEG_DIR/'test_eegs'
+    if os.path.exists(train_eeg_path):
+        print(f"Directory {train_eeg_path} already existed")
+    else:
+        os.makedirs(train_eeg_path)
+        print(f"Created directory {train_eeg_path}")
+    if os.path.exists(test_eeg_path):
+        print(f"Directory {test_eeg_path} already existed")
+    else:
+        os.makedirs(test_eeg_path)
+        print(f"Created directory {test_eeg_path}")
+    
 def metadata_df(split="train"):
     """Return a DataFrame with metadata for the train or test set."""
     if split not in ["train", "test"]:
         raise ValueError('Expected split="train" or split="test"')
     metadata = pd.read_csv(f'{BASE_PATH}/{split}.csv')
     metadata['eeg_path'] = f'{BASE_PATH}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'.parquet'
-    # metadata['eeg_path'] = [os.path.join( BASE_PATH, f"{split}_eegs", f"{id}.parquet" ) for id in metadata['eeg_id']]
     metadata['spec_path'] = f'{BASE_PATH}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.parquet'
     metadata['spec_npy_path'] = f'{SPEC_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.npy'
+    metadata['eeg_npy_path'] = f'{EEG_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'npy'
     if split == "train":
         metadata['class_label'] = metadata.expert_consensus.map(name2label)
     return metadata
@@ -90,6 +100,38 @@ def process_all_specs():
         for spec_id in tqdm(test_spec_ids, total=len(test_spec_ids))
     )
     print(f"Saved spectrograms as .npy files in {SPEC_DIR}")
+    
+def process_eeg(eeg_id, split="train"):
+    """Convert a single eeg parquet to .npy, and save the result."""
+    eeg_path = f"{BASE_PATH}/{split}_eegs/{eeg_id}.parquet"
+    eeg = pd.read_parquet(eeg_path)
+    eeg = eeg.fillna(0).values[:, 1:].T # fill NaN values with 0, transpose for (Time, Amplitude) -> (Amplitude, Time)
+    eeg = eeg.astype("float32")
+    np.save(f"{EEG_DIR}/{split}_eegs/{eeg_id}.npy", eeg)
+
+def process_all_eegs():
+    """Convert and save all eegs. This could be slow."""
+    # Get unique eeg_ids of train and valid data
+    metadata_train = metadata_df("train")
+    eeg_ids = metadata_train["eeg_id"].unique()
+
+    # Parallelize the processing using joblib for training data
+    _ = joblib.Parallel(n_jobs=-1, backend="loky")(
+        joblib.delayed(process_eeg)(eeg_id, "train")
+        for eeg_id in tqdm(eeg_ids, total=len(eeg_ids))
+    )
+
+    # Get unique eeg_ids of test data
+    metadata_test = metadata_df("test")
+    test_eeg_ids = metadata_test["eeg_id"].unique()
+
+    # Parallelize the processing using joblib for test data
+    _ = joblib.Parallel(n_jobs=-1, backend="loky")(
+        joblib.delayed(process_eeg)(eeg_id, "test")
+        for eeg_id in tqdm(test_eeg_ids, total=len(test_eeg_ids))
+    )
+    print(f"Saved eegs as .npy files in {EEG_DIR}")
+    
     
 class SpectrogramDataset(torch.utils.data.Dataset):
     """Dataset with only spectrogram data.
@@ -143,15 +185,71 @@ class SpectrogramDataset(torch.utils.data.Dataset):
             "seizure_vote", "lpd_vote", "gpd_vote",
             "lrda_vote", "grda_vote", "other_vote"
         ]].iloc[i]
-        # target should be float so that nn.KLDivLoss works
-        target = torch.tensor(np.asarray(expert_votes)).float()
+        target = torch.tensor(np.asarray(expert_votes))
         if self.normalize_targets:
             target /= target.sum()
+        # target should be float so that nn.KLDivLoss works
         return tens.to(self.dtype), target.to(self.dtype)
+    
     
 class SpectrogramTestDataset(SpectrogramDataset):
     def __getitem__(self, i):
         npy_path = self.metadata_df["spec_npy_path"].iloc[i]
+        tens = torch.from_numpy(np.load(npy_path))
+        target = torch.tensor([1., 1., 1., 1., 1.])  # dummy values
+        return tens, target
+    
+    
+class EegDataset(torch.utils.data.Dataset):
+    def __init__(
+            self,
+            metadata_df,
+            n_items=None,
+            item_transforms=None,
+            preloaded=False,
+            normalize_targets=False,
+            dtype=torch.get_default_dtype()
+        ):
+        if n_items is not None:
+            self.metadata_df = metadata_df.sample(n=n_items).copy()
+        else:
+            self.metadata_df = metadata_df
+        self.item_transforms = item_transforms
+        self.normalize_targets = normalize_targets
+        self.dtype = dtype
+        if preloaded:
+            self.eeg_dict = {npy_path: torch.from_numpy(np.load(npy_path))
+                              for npy_path in self.metadata_df.eeg_npy_path.unique()}
+        else:
+            self.eeg_dict = None
+        
+    def __len__(self):
+        return len(self.metadata_df)
+    
+    def __getitem__(self, i):
+        npy_path = self.metadata_df["eeg_npy_path"].iloc[i]
+        offset = 200*int(self.metadata_df["eeg_label_offset_seconds"].iloc[i])
+        #CHANGE THIS LINE PROPERLY
+        if self.eeg_dict is not None:
+            tens = self.eeg_dict[npy_path][:, offset:offset+10000]
+        else:
+            tens = torch.from_numpy(np.load(npy_path))[:, offset:offset+10000]
+        if self.item_transforms is not None:
+            tens = self.item_transforms(tens)
+        expert_votes = self.metadata_df[[
+            "seizure_vote", "lpd_vote", "gpd_vote",
+            "lrda_vote", "grda_vote", "other_vote"
+        ]].iloc[i]
+        target = torch.tensor(np.asarray(expert_votes))
+        if self.normalize_targets:
+            target /= target.sum()
+        # target should be float so that nn.KLDivLoss works
+        return tens.to(self.dtype), target.to(self.dtype)
+    
+    
+class EegTestDataset(EegDataset):
+    def __getitem__(self, i):
+        npy_path = self.metadata_df["eeg_npy_path"].iloc[i]
         tens = torch.from_numpy(np.load(npy_path))
         target = torch.tensor([1., 1., 1., 1., 1.])  # dummy values
         return tens, target
