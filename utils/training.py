@@ -287,12 +287,12 @@ class Trainer():
         """
         if ax is None:
             ax = plt.gca()
-        plt.plot(self.histories['batches'], self.histories['train_loss'], label="training")
-        plt.plot(self.histories['batches'], self.histories['val_loss'], label="validation")
-        plt.xlabel('Batch')
-        plt.ylabel('loss')
-        plt.title("Loss")
-        plt.legend()
+        ax.plot(self.histories['batches'], self.histories['train_loss'], label="training")
+        ax.plot(self.histories['batches'], self.histories['val_loss'], label="validation")
+        ax.set_xlabel('Batch')
+        ax.set_ylabel('loss')
+        ax.set_title("Loss")
+        ax.legend()
         
         plt.tight_layout()
         
