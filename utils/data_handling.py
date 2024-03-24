@@ -146,6 +146,9 @@ class SpectrogramDataset(torch.utils.data.Dataset):
       preloaded (default False): whether to load every spectrogram into memory at
         initialization. I estimate that this uses 5-6 GB of RAM and is about
         15% faster during training and 10% faster during inference.
+      dtype (optional): torch.float datatype to use.
+      random_state (optional): random seed to use when sampling items, if
+        n_items is not None.
     """
     def __init__(
             self,
@@ -154,15 +157,19 @@ class SpectrogramDataset(torch.utils.data.Dataset):
             item_transforms=None,
             preloaded=False,
             normalize_targets=True,
-            dtype =  torch.get_default_dtype()
+            dtype=None,
+            random_state=None,
         ):
         if n_items is not None:
-            self.metadata_df = metadata_df.sample(n=n_items).copy()
+            self.metadata_df = metadata_df.sample(n=n_items, random_state=random_state).copy()
         else:
             self.metadata_df = metadata_df
         self.item_transforms = item_transforms
         self.normalize_targets = normalize_targets
-        self.dtype = dtype
+        if dtype is None:
+            self.dtype = torch.get_default_dtype()
+        else:
+            self.dtype = dtype
         if preloaded:
             self.spec_dict = {npy_path: torch.from_numpy(np.load(npy_path))
                               for npy_path in self.metadata_df.spec_npy_path.unique()}
@@ -185,7 +192,7 @@ class SpectrogramDataset(torch.utils.data.Dataset):
             "seizure_vote", "lpd_vote", "gpd_vote",
             "lrda_vote", "grda_vote", "other_vote"
         ]].iloc[i]
-        target = torch.tensor(np.asarray(expert_votes))
+        target = torch.tensor(np.asarray(expert_votes)).float()
         if self.normalize_targets:
             target /= target.sum()
         # target should be float so that nn.KLDivLoss works
@@ -208,15 +215,19 @@ class EegDataset(torch.utils.data.Dataset):
             item_transforms=None,
             preloaded=False,
             normalize_targets=True,
-            dtype=torch.get_default_dtype()
+            dtype=None,
+            random_state=None,
         ):
         if n_items is not None:
-            self.metadata_df = metadata_df.sample(n=n_items).copy()
+            self.metadata_df = metadata_df.sample(n=n_items, random_state=random_state).copy()
         else:
             self.metadata_df = metadata_df
         self.item_transforms = item_transforms
         self.normalize_targets = normalize_targets
-        self.dtype = dtype
+        if dtype is None:
+            self.dtype = torch.get_default_dtype()
+        else:
+            self.dtype = dtype
         if preloaded:
             self.eeg_dict = {npy_path: torch.from_numpy(np.load(npy_path))
                               for npy_path in self.metadata_df.eeg_npy_path.unique()}
@@ -240,7 +251,7 @@ class EegDataset(torch.utils.data.Dataset):
             "seizure_vote", "lpd_vote", "gpd_vote",
             "lrda_vote", "grda_vote", "other_vote"
         ]].iloc[i]
-        target = torch.tensor(np.asarray(expert_votes))
+        target = torch.tensor(np.asarray(expert_votes)).float()
         if self.normalize_targets:
             target /= target.sum()
         # target should be float so that nn.KLDivLoss works
