@@ -15,10 +15,10 @@ from torchinfo import summary
 from brains.utils.data_handling import metadata_df, SpectrogramDataset
 
 #
-# ~~~ Tom's utils
-from quality_of_life.my_torch_utils import JL_layer, convert_Dataset_to_Tensors
-from brains.Toms_utils import train_val_split
-from fit import fit, count_percent_nonzero_grads, compute_ell_1_norm_of_params, compute_ell_2_norm_of_params
+# ~~~ Tom's utils (YOU MAY NEED TO MODIFY THESE IMPORT STATEMENTS AND THE IMPORT STATEMENTS THEREIN)
+from Toms_dependencies.quality_of_life.my_torch_utils import JL_layer, convert_Dataset_to_Tensors
+from Toms_utils import train_val_split
+from Toms_dependencies.fit import fit, count_percent_nonzero_grads, compute_ell_1_norm_of_params, compute_ell_2_norm_of_params
 
 
 # warnings.filterwarnings("ignore")
