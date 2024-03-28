@@ -302,7 +302,7 @@ def compute_ell_p_norm_of_params( model, data, loss_fn, optimizer, p ):
         norm_to_the_power_of_p = 0.
         for params in model.parameters():
             norm_to_the_power_of_p += torch.sum(params.abs()**p).item() if isinstance(p,(int,float)) else torch.max(params.abs()).item()
-    return norm_to_the_power_of_p**(1/p)
+    return norm_to_the_power_of_p**(1/p) if isinstance(p,(int,float)) else norm_to_the_power_of_p
 
 #
 # ~~~ The cases p = 1, 2, Inf
