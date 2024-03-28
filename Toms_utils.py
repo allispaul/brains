@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 import torch
-from brains.utils.data_handling import metadata_df    # YOU MAY NEED TO CHANGE THE IMPORT PATH
-from brains.utils.data_handling import SPEC_DIR       # YOU MAY NEED TO CHANGE THE IMPORT PATH
+from utils.data_handling import metadata_df    # YOU MAY NEED TO CHANGE THE IMPORT PATH
+from utils.data_handling import SPEC_DIR       # YOU MAY NEED TO CHANGE THE IMPORT PATH
 try:
     from tabulate import tabulate   # ~~~ use if available
 except:
@@ -114,7 +114,6 @@ def train_val_split( metadata, val_frac=0.2, seed=4, verbose=True ):
     n_cases = len(cases)            # ~~~ number of different cases represented by our training set
     n_val = round(val_frac*n_cases) # ~~~ number of different cases that we want in the validation set
     if verbose:
-        print("")
         print(f"{n_cases} unique spectrograms, using {n_val} for validation set.")
     #
     # ~~~ Split the data not by "rows" but, rather, in a manner that respects the "grouped" nature of our data
