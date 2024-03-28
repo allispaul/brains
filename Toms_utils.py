@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 import torch
-from brains.utils.data_handling import metadata_df
-from brains.utils.data_handling import SPEC_DIR
+from brains.utils.data_handling import metadata_df    # YOU MAY NEED TO CHANGE THE IMPORT PATH
+from brains.utils.data_handling import SPEC_DIR       # YOU MAY NEED TO CHANGE THE IMPORT PATH
 try:
     from tabulate import tabulate   # ~~~ use if available
 except:
