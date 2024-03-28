@@ -45,10 +45,14 @@ kaggle config set -n competition -v hms-harmful-brain-activity-classification
 to set this competition as your default competition, and
 ```
 kaggle competitions download
-
+```
 (in your data folder) to download the data (18.4GB zip file). I would recommend doing this in a folder called `data/` inside the project folder (which Git will ignore).
 
 
 ## Running Tom's Code
 
-In order to reproduce the file `simple_nn_on_spectrograms.py` you may just need to modify the import statements of Tom's custom stuff. Hopefully no additional work is needed for reproducibility?
+In order to reproduce the file `simple_nn_on_spectrograms.py` you may just need to modify the import statements of Tom's custom stuff. Indeed these can depend upon your python environment. For your future use in other projects, I recommend that you directly refer to my (Tom's) standalone packaging of these features at
+ - https://github.com/ThomasLastName/fit
+ - https://github.com/ThomasLastName/quality_of_life
+
+where I will be maintaining them, too.
