@@ -12,7 +12,7 @@ from torchinfo import summary
 
 #
 # ~~~ Paul's utils (thanks Paul!)
-from brains.utils.data_handling import metadata_df, SpectrogramDataset
+from utils.data_handling import metadata_df, SpectrogramDataset
 
 #
 # ~~~ Tom's utils (YOU MAY NEED TO MODIFY THESE IMPORT STATEMENTS AND THE IMPORT STATEMENTS THEREIN)
