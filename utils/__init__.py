@@ -5,3 +5,4 @@ from .training import *
 from .logger import *
 from .models import *
 from .visualization import *
+from .wavenet import *
