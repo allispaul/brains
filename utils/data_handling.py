@@ -63,7 +63,7 @@ def metadata_df(split="train"):
     metadata['eeg_path'] = f'{BASE_PATH}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'.parquet'
     metadata['spec_path'] = f'{BASE_PATH}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.parquet'
     metadata['spec_npy_path'] = f'{SPEC_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.npy'
-    metadata['eeg_npy_path'] = f'{EEG_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'npy'
+    metadata['eeg_npy_path'] = f'{EEG_DIR}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'npy'
     if split == "train":
         metadata['class_label'] = metadata.expert_consensus.map(name2label)
     return metadata
