@@ -281,7 +281,7 @@ class WaveNetClassifierHead(nn.Module):
     
 class WaveNetDiscriminative(nn.Module):
     """WaveNet architecture for classifying audio."""
-    def __init__(self, in_channels, channels, num_blocks, kernel_size, downsample, 
+    def __init__(self, in_channels, hidden_channels, num_blocks, kernel_size, downsample, 
                  num_classes, dilation_schedule=None, bias=False, device=None,
                  dtype=None):
         super().__init__()
