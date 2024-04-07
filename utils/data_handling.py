@@ -63,7 +63,7 @@ def metadata_df(split="train"):
     metadata['eeg_path'] = f'{BASE_PATH}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'.parquet'
     metadata['spec_path'] = f'{BASE_PATH}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.parquet'
     metadata['spec_npy_path'] = f'{SPEC_DIR}/{split}_spectrograms/'+metadata['spectrogram_id'].astype(str)+'.npy'
-    metadata['eeg_npy_path'] = f'{EEG_DIR}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'npy'
+    metadata['eeg_npy_path'] = f'{EEG_DIR}/{split}_eegs/'+metadata['eeg_id'].astype(str)+'.npy'
     if split == "train":
         metadata['class_label'] = metadata.expert_consensus.map(name2label)
     return metadata
@@ -105,7 +105,7 @@ def process_eeg(eeg_id, split="train"):
     """Convert a single eeg parquet to .npy, and save the result."""
     eeg_path = f"{BASE_PATH}/{split}_eegs/{eeg_id}.parquet"
     eeg = pd.read_parquet(eeg_path)
-    eeg = eeg.fillna(0).values[:, 1:].T # fill NaN values with 0, transpose for (Time, Amplitude) -> (Amplitude, Time)
+    eeg = eeg.fillna(0).values[:, :].T # fill NaN values with 0, transpose for (Time, Amplitude) -> (Amplitude, Time)
     eeg = eeg.astype("float32")
     np.save(f"{EEG_DIR}/{split}_eegs/{eeg_id}.npy", eeg)
 
