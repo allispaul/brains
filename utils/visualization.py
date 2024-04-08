@@ -71,8 +71,8 @@ def scatterplot_matrix(y_true, y_pred,
         for j in range(n_labels):
             axs[i][j].scatter(y_true[:, i], y_pred[:, j])
     
-    for ax, col in zip(axes[0], labels):
+    for ax, col in zip(axs[0], labels):
         ax.set_title(col)
 
-    for ax, row in zip(axes[:,0], labels):
+    for ax, row in zip(axs[:,0], labels):
         ax.set_ylabel(row, rotation=0, size='large')

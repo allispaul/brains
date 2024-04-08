@@ -56,17 +56,22 @@ def inverse_compand(y):
 # and targets of shape [batch, channels, seq], suitable for the task of predicting
 # the next sample.
 
-def prep_batch_generative(batch):
-    """Given a batch, get a pair (batch, targets). The targets are the batch,
-    shifted left by 1, and converted to one of 256 classes per sample by
-    companding. 
+# def prep_batch_generative(batch):
+#     """Given a batch, get a pair (batch, targets). The targets are the batch,
+#     shifted left by 1, and converted to one of 256 classes per sample by
+#     companding. 
     
-    Note that one sample gets dropped: a dataloader producing a sequence length
-    of 9 is needed for a model that takes sequences of length 8.
-    """
-    tens = batch[:, :, :-1]  # batch, channels, seq
-    targ = compand(batch[:, :, 1:])
-    return tens, targ
+#     Note that one sample gets dropped: a dataloader producing a sequence length
+#     of 9 is needed for a model that takes sequences of length 8.
+#     """
+#     tens = batch[:, :, :-1]  # batch, channels, seq
+#     targ = compand(batch[:, :, 1:])
+#     return tens, targ
+
+def prep_batch_generative(batch):
+    # EEG signals have large amplitudes -- scaling them down so the
+    # generative loss doesn't overwhelm the discriminative one
+    return batch[:, :, :-1], batch[:, :, 1:] / 65536
 
 
 ### Dilation
@@ -194,6 +199,10 @@ class ResidualStack(nn.Module):
 # Another would be to output a 4d tensor [batch, out_channels, seq, classes], and
 # use a classification loss, against some compressed form of the original signal.
 
+# Because of time constraints, I ended up keeping the architecture the same, and just
+# using a regression loss -- so the outputs are interpreted as [batch, channels, seq],
+# not [batch, channels, classification_logits].
+
 class WaveNetGenerativeHead(nn.Module):
     """Receive the sum of skip connections from the ResBlock layers.
     Produce logits for next audio sample, taken as one of 256 companded
@@ -218,6 +227,7 @@ class WaveNetGenerativeHead(nn.Module):
     def forward(self, x):
         return self.steps(x)
     
+    
 class WaveNetGenerative(nn.Module):
     """WaveNet architecture for generating raw audio."""
     def __init__(self, in_channels, hidden_channels, num_blocks, kernel_size,
@@ -238,8 +248,8 @@ class WaveNetGenerative(nn.Module):
         
     def forward(self, x):
         # x in shape [batch, channels, seq]
-        # Return in shape [batch, seq, logit]
-        return self.output(self.res_stack(self.input(x))).transpose(1, 2)
+        # Return in shape [batch, channels, seq]
+        return self.output(self.res_stack(self.input(x)))
     
     def generate(self, start_audio, num_new_samples):
         # Assume start_audio is a batch
@@ -261,22 +271,25 @@ class WaveNetGenerative(nn.Module):
 class WaveNetClassifierHead(nn.Module):
     def __init__(self, channels, downsample, num_classes):
         super().__init__()
-        self.steps = nn.Sequential(
-            # Not quite the same as the paper (which is underspecified, anyway)
-            # I put a conv before the ReLU
-            nn.Conv1d(channels, channels, kernel_size=3, padding=1),
+        self.pre_pool = nn.Sequential(
+            nn.Conv1d(channels, channels, kernel_size=5, padding=2),
             nn.ReLU(),
-            nn.AvgPool1d(downsample),
-            nn.ReLU(),
-            nn.Conv1d(channels, num_classes, kernel_size=1),
-            nn.ReLU(),
-            nn.Conv1d(num_classes, num_classes, kernel_size=1),
-            # Output log-probabilities?
-            nn.LogSoftmax(dim=1),
         )
+        self.pool = nn.AvgPool1d(downsample, stride=downsample)
+        # shape [batch, channels, seq // downsample]
+        self.post_pool = nn.Sequential(
+            nn.ReLU(),
+            nn.Conv1d(channels, num_classes, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.Conv1d(num_classes, num_classes, kernel_size=5, padding=2),
+        )
+        # shape [batch, num_classes, seq // downsample]
         
     def forward(self, x):
-        return self.steps(x)
+        x = self.post_pool(self.pool(self.pre_pool(x)))
+        x = x.mean(dim=2)  # shape [batch, num_classes]; average over time
+        x = F.log_softmax(x, dim=1)  # convert to log-probabilities
+        return x
     
     
 class WaveNetDiscriminative(nn.Module):
@@ -300,8 +313,8 @@ class WaveNetDiscriminative(nn.Module):
         
     def forward(self, x):
         # x in shape [batch, channels, seq]
-        # Return in shape [batch, seq, logit]
-        return self.output(self.res_stack(self.input(x))).transpose(1, 2)
+        # Return in shape [batch, logit]
+        return self.output(self.res_stack(self.input(x)))
     
     
 class WaveNetDualTask(nn.Module):
@@ -314,6 +327,8 @@ class WaveNetDualTask(nn.Module):
       hidden_channels: Number of channels used internally by convolution layers.
       num_blocks: Number of successive convolution blocks.
       kernel_size: Size of convolution kernel.
+      gen_channels_out: Number of channels for the generative head to produce.
+        For a regression loss, this should equal in_channels.
       downsample: How far to downsample before applying classifier head. If
         seq_length // downsample > 1, you'll get multiple classifier outputs per
         input signal, which you can then decide how to collate into a prediction.
@@ -327,8 +342,8 @@ class WaveNetDualTask(nn.Module):
     WaveNetDualTask.receptive_field shows how many consecutive EEG samples are used
     to calculate a given output.
     """
-    def __init__(self, in_channels, hidden_channels, num_blocks, kernel_size, downsample, 
-                 num_classes, dilation_schedule=None, bias=False, device=None,
+    def __init__(self, in_channels, hidden_channels, num_blocks, kernel_size, gen_channels_out,
+                 downsample, num_classes, dilation_schedule=None, bias=False, device=None,
                  dtype=None):
         super().__init__()
         self.input = CausalConv1d(in_channels, hidden_channels, kernel_size, bias=bias,
@@ -336,7 +351,7 @@ class WaveNetDualTask(nn.Module):
         self.res_stack = ResidualStack(hidden_channels, num_blocks, kernel_size,
                                        dilation_schedule, bias=bias,
                                        device=device, dtype=dtype)
-        self.gen_output = WaveNetGenerativeHead(hidden_channels)
+        self.gen_output = WaveNetGenerativeHead(hidden_channels, gen_channels_out)
         self.disc_output = WaveNetClassifierHead(hidden_channels, downsample, num_classes)
         
         self.receptive_field = self.res_stack.receptive_field
@@ -348,8 +363,8 @@ class WaveNetDualTask(nn.Module):
     def forward(self, x):
         # x in shape [batch, channels, seq]
         res_out = self.res_stack(self.input(x))
-        # discriminative output in shape [batch, seq, logits]
-        disc_out = self.disc_output(res_out).transpose(1, 2)
+        # discriminative output in shape [batch, channels, seq]
+        disc_out = self.disc_output(res_out)
         # generative output in shape [batch, channels, seq]
         gen_out = self.gen_output(res_out)
         return gen_out, disc_out

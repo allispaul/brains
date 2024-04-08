@@ -214,14 +214,21 @@ class EegDataset(torch.utils.data.Dataset):
             n_items=None,
             item_transforms=None,
             preloaded=False,
+            force_unique=False,
             normalize_targets=True,
             dtype=None,
             random_state=None,
         ):
+        self.metadata_df = metadata_df.copy()
+        if force_unique:
+            # Select a unique row for each value of eeg_id
+            selected_rows = [
+                metadata_df[metadata_df['eeg_id'] == eeg_id].sample(1, random_state=random_state)
+                for eeg_id in metadata_df['eeg_id'].unique()
+            ]
+            self.metadata_df = pd.concat(selected_rows, ignore_index=True)
         if n_items is not None:
-            self.metadata_df = metadata_df.sample(n=n_items, random_state=random_state).copy()
-        else:
-            self.metadata_df = metadata_df
+            self.metadata_df = self.metadata_df.sample(n=n_items, random_state=random_state)
         self.item_transforms = item_transforms
         self.normalize_targets = normalize_targets
         if dtype is None:
